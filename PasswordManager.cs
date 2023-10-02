@@ -1,10 +1,9 @@
-﻿using System.Buffers;
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
-namespace PasswordManager.workspace;
+namespace PasswordManager;
 
 
 
@@ -13,21 +12,21 @@ public class PasswordManager: IPasswordManager<PasswordManager.PasswordData>
     private readonly IPasswordRepository<string, PasswordData> _passwordRepository;
 
 
-    private readonly Func<byte[], JsonObject, IKdfProvider?> _kdfFactory;
+    private readonly Func<byte[], string, JsonObject, IKdfProvider?> _kdfFactory;
     private readonly Func<byte[], IKdfProvider> _defaultKdfFactory;
     
-    private readonly Func<JsonObject, IKdfProvider, IEncryptionProvider?> _encryptionProviderFactory;
+    private readonly Func<string, IKdfProvider, JsonObject, IEncryptionProvider?> _encryptionProviderFactory;
     private readonly Func<IKdfProvider, IEncryptionProvider> _defaultEncryptionProviderFactory;
     
-    private readonly Func<JsonObject, IKdfProvider, IDecryptionProvider?> _decryptionProviderFactory;
+    private readonly Func<string, IKdfProvider, JsonObject, IDecryptionProvider?> _decryptionProviderFactory;
 
     public PasswordManager(
         IPasswordRepository<string, PasswordData> passwordRepository,
-        Func<byte[], JsonObject, IKdfProvider?> kdfFactory, 
+        Func<byte[], string, JsonObject, IKdfProvider?> kdfFactory, 
         Func<byte[], IKdfProvider> defaultKdfFactory, 
-        Func<JsonObject, IKdfProvider, IEncryptionProvider?> encryptionProviderFactory,
+        Func<string, IKdfProvider, JsonObject, IEncryptionProvider?> encryptionProviderFactory,
         Func<IKdfProvider, IEncryptionProvider> defaultEncryptionProviderFactory,
-        Func<JsonObject, IKdfProvider, IDecryptionProvider?> decryptionProviderFactory
+        Func<string, IKdfProvider, JsonObject, IDecryptionProvider?> decryptionProviderFactory
     )
     {
         this._passwordRepository = passwordRepository;
@@ -63,7 +62,9 @@ public class PasswordManager: IPasswordManager<PasswordManager.PasswordData>
         await this._passwordRepository.StoreAsync(key, 
             new PasswordData(
                 result.Data,
+                encryptionProvider.Identifier,
                 result.Metadata,
+                kdfProvider.Identifier,
                 kdfProvider.Metadata
             )
         );
@@ -72,20 +73,22 @@ public class PasswordManager: IPasswordManager<PasswordManager.PasswordData>
     public async Task<byte[]> RetrieveAsync(string key, byte[] passphrase)
     {
         var data = await this._passwordRepository.RetrieveAsync(key);
-        
-        string encryptionMethod = data.CipherMetadata.GetValueOrThrow<string>("method");
-        string kdfMethod = data.KdfMetadata.GetValueOrThrow<string>("method");
+
+        string encryptionMethod = data.CipherMethod;
+        string kdfMethod = data.KdfMethod;
 
         var kdfProvider = this._kdfFactory(
             passphrase,
+            kdfMethod,
             data.KdfMetadata
         );
         
         if (kdfProvider is null) throw new ArgumentOutOfRangeException($"KDF provider {data.KdfMetadata.ToJsonString(new JsonSerializerOptions(){WriteIndented = true})} is not supported");
 
         var encryptionProvider = this._decryptionProviderFactory(
-            data.CipherMetadata,
-            kdfProvider
+            data.CipherMethod,
+            kdfProvider,
+            data.CipherMetadata
         );
 
         if (encryptionProvider is null) throw new ArgumentOutOfRangeException($"Encryption provider {encryptionMethod} is not supported");
@@ -118,9 +121,9 @@ public class PasswordManager: IPasswordManager<PasswordManager.PasswordData>
     private async Task<bool> InternalDeleteAsync(string key, byte[] passphrase)
     {
         var data = await this._passwordRepository.RetrieveAsync(key);
-        var kdfProvider = this._kdfFactory(passphrase, data.KdfMetadata);
+        var kdfProvider = this._kdfFactory(passphrase, data.KdfMethod, data.KdfMetadata);
         if (kdfProvider is null) throw new ArgumentOutOfRangeException($"KDF provider {data.KdfMetadata.ToJsonString(new JsonSerializerOptions(){WriteIndented = true})} is not supported");
-        var encryptionProvider = this._decryptionProviderFactory(data.CipherMetadata, kdfProvider);
+        var encryptionProvider = this._decryptionProviderFactory(data.CipherMethod, kdfProvider, data.CipherMetadata);
         if (encryptionProvider is null) throw new ArgumentOutOfRangeException($"Encryption provider {data.CipherMetadata.ToJsonString(new JsonSerializerOptions(){WriteIndented = true})} is not supported");
 
         try {
@@ -136,13 +139,21 @@ public class PasswordManager: IPasswordManager<PasswordManager.PasswordData>
     public class PasswordData
     {
         public readonly byte[] EncryptedPassword;
-        public readonly JsonObject CipherMetadata;
-        public readonly JsonObject KdfMetadata;
         
-        public PasswordData(byte[] encryptedPassword, JsonObject cipherMetadata, JsonObject kdfMetadata)
+        public readonly string CipherMethod;
+        public readonly JsonObject CipherMetadata;
+        
+        public readonly string KdfMethod;
+        public readonly JsonObject KdfMetadata;
+
+        public PasswordData(
+            byte[] encryptedPassword, string cipherMethod, JsonObject cipherMetadata, string kdfMethod, JsonObject kdfMetadata
+        )
         {
             this.EncryptedPassword = encryptedPassword;
+            this.CipherMethod = cipherMethod;
             this.CipherMetadata = cipherMetadata;
+            this.KdfMethod = kdfMethod;
             this.KdfMetadata = kdfMetadata;
         }
     }

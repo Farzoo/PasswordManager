@@ -1,7 +1,7 @@
 ﻿using System.Text.Json;
 using System.Text.Json.Nodes;
 
-namespace PasswordManager.workspace;
+namespace PasswordManager;
 
 internal static class JsonExtensions
 {

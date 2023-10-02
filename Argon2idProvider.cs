@@ -1,15 +1,13 @@
 ﻿using System.Text.Json.Nodes;
 using Konscious.Security.Cryptography;
 
-namespace PasswordManager.workspace;
+namespace PasswordManager;
 
 public class Argon2idProvider : IKdfProvider
 {
     private readonly Argon2id _argon2id;
     private readonly JsonObject _parameters;
     
-    private const string Identifier = "Argon2id";
-
     public Argon2idProvider(byte[] passphrase, byte[] salt, int iterations, int memorySize, int degreeOfParallelism)
     {
 
@@ -48,4 +46,5 @@ public class Argon2idProvider : IKdfProvider
     }
 
     public JsonObject Metadata => this._parameters;
+    public string Identifier => "Argon2id";
 }

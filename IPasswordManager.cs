@@ -1,4 +1,4 @@
-﻿namespace PasswordManager.workspace;
+﻿namespace PasswordManager;
 
 public interface IPasswordManager<TEntity> where TEntity : notnull
 {

@@ -1,11 +1,9 @@
-﻿using System.Buffers;
-using System.Diagnostics;
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
-namespace PasswordManager.workspace;
+namespace PasswordManager;
 
 class Program
 {
@@ -19,7 +17,6 @@ class Program
         Save,
         Quit
     }
-    
     static void Main(string[] args)
     {
         var passwordManager = new PasswordManager(
@@ -138,10 +135,12 @@ class Program
                         var obj = new JsonObject()
                         {
                             {"cipherText", Convert.ToBase64String(row.Value.EncryptedPassword)},
-                            {"kdfParams", JsonSerializer.SerializeToNode(row.Value.KdfMetadata)},
-                            {"cipherParams", JsonSerializer.SerializeToNode(row.Value.CipherMetadata)}
+                            {"cipherMethod", row.Value.CipherMethod},
+                            {"cipherParams", JsonSerializer.SerializeToNode(row.Value.CipherMetadata)},
+                            {"kdfMethod", row.Value.KdfMethod},
+                            {"kdfParams", JsonSerializer.SerializeToNode(row.Value.KdfMetadata)}
                         };
-                        
+
                         json.Add(row.Key, obj);
                     }
                     var jsonSerializerOptions = new JsonSerializerOptions();
@@ -198,11 +197,10 @@ class Program
         );
     }
 
-    private static IKdfProvider KdfProviderFactory(byte[] passphrase, JsonObject param)
+    private static IKdfProvider KdfProviderFactory(byte[] passphrase, string kdfMethod, JsonObject param)
     {
-        var method = param.GetValueOrThrow<string>("method");
-
-        return method switch
+        
+        return kdfMethod switch
         {
             "Argon2id" => new Argon2idProvider(
                 passphrase, 
@@ -211,40 +209,36 @@ class Program
                 param.GetValueOrThrow<int>("memorySize"),
                 param.GetValueOrThrow<int>("degreeOfParallelism")
             ),
-            _ => throw new ArgumentOutOfRangeException(nameof(method), $"Unknown KDF method {method}")
+            _ => throw new ArgumentOutOfRangeException(nameof(kdfMethod), $"Unknown KDF method {kdfMethod}")
         };
     }
 
-    private static ICryptoProvider EncryptionProviderFactory(JsonObject param, IKdfProvider kdfProvider)
+    private static ICryptoProvider EncryptionProviderFactory(string cipherMethod, IKdfProvider kdfProvider, JsonObject param)
     {
-        var method = param.GetValueOrThrow<string>("method");
-
-        return method switch
+        return cipherMethod switch
         {
-            AesCryptoProvider.Identifier => AesCryptoProvider.CreateEncryptor(
-                kdfProvider, 
-                param.GetValueOrThrow<int>("keySize"), 
-                param.GetValueOrThrow<int>("tagSize"), 
+            AesCryptoProvider.IDENTIFIER => AesCryptoProvider.CreateEncryptor(
+                kdfProvider,
+                param.GetValueOrThrow<int>("keySize"),
+                param.GetValueOrThrow<int>("tagSize"),
                 param.GetValueOrThrow<int>("nonceSize")
             ),
-            _ => throw new ArgumentOutOfRangeException(nameof(method), $"Unknown encryption method {method}")
+            _ => throw new ArgumentOutOfRangeException(nameof(cipherMethod), $"Unknown encryption method {cipherMethod}")
         };
     }
 
-    private static IDecryptionProvider DecryptionProviderFactory(JsonObject param, IKdfProvider kdfProvider)
+    private static IDecryptionProvider DecryptionProviderFactory(string cipherMethod, IKdfProvider kdfProvider, JsonObject param)
     {
-        var method = param.GetValueOrThrow<string>("method");
-
-        return method switch
+        return cipherMethod switch
         {
-            AesCryptoProvider.Identifier => AesCryptoProvider.CreateDecryptor(
+            AesCryptoProvider.IDENTIFIER => AesCryptoProvider.CreateDecryptor(
                 kdfProvider,
                 Convert.FromBase64String(param.GetValueOrThrow<string>("nonce")),
                 Convert.FromBase64String(param.GetValueOrThrow<string>("tag")),
                 param.TryGetValue<string>("additionalData", out var additionalData) ? Convert.FromBase64String(additionalData!) : null,
                 param.GetValueOrThrow<int>("keySize")
             ),
-            _ => throw new ArgumentOutOfRangeException(nameof(method), $"Unknown encryption method {method}")
+            _ => throw new ArgumentOutOfRangeException(nameof(cipherMethod), $"Unknown encryption method {cipherMethod}")
         };
     }
 }

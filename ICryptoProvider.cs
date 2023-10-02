@@ -1,18 +1,19 @@
 ﻿using System.Text.Json.Nodes;
 
-namespace PasswordManager.workspace;
+namespace PasswordManager;
 
 
 public interface IEncryptionProvider : IDisposable
 {
-    public bool CanUse { get; } 
+    public bool CanUse { get; }
+    public string Identifier { get; }
     CryptoResult Encrypt(byte[] plainText);
 }
 
 public interface IDecryptionProvider : IDisposable
 {
     public bool CanUse { get; }
-    
+    public string Identifier { get; }
     byte[] Decrypt(byte[] cipherText, out bool passphraseCorrect);
 }
 

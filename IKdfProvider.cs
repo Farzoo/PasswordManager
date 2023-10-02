@@ -1,6 +1,6 @@
 ﻿using System.Text.Json.Nodes;
 
-namespace PasswordManager.workspace;
+namespace PasswordManager;
 
 public interface IKdfProvider : IDisposable
 {
@@ -8,4 +8,5 @@ public interface IKdfProvider : IDisposable
     public void Reset();
     
     public JsonObject Metadata { get; }
+    public string Identifier { get; }
 }

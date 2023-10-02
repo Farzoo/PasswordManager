@@ -1,4 +1,4 @@
-﻿namespace PasswordManager.workspace;
+﻿namespace PasswordManager;
 
 public interface IPasswordRepository<TKey, TEntity>
 {

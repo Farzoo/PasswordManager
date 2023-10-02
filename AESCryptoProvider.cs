@@ -1,10 +1,7 @@
-﻿using System.Buffers.Binary;
-using System.Security.Cryptography;
-using System.Text;
+﻿using System.Security.Cryptography;
 using System.Text.Json.Nodes;
-using Konscious.Security.Cryptography;
 
-namespace PasswordManager.workspace;
+namespace PasswordManager;
 
 public class AesCryptoProvider : ICryptoProvider
 {
@@ -18,10 +15,11 @@ public class AesCryptoProvider : ICryptoProvider
     
     private readonly int _nonceSize;
     private readonly int _saltSize;
-    
-    public const string Identifier = "AesGcm";
-
     public bool CanUse { get; private set; } = true;
+    
+    public string Identifier => IDENTIFIER;
+
+    public const string IDENTIFIER = "AES_GCM";
 
     private AesCryptoProvider(IKdfProvider kdfProvider, int keySize, int tagSize, int nonceSize)
     {
@@ -71,10 +69,9 @@ public class AesCryptoProvider : ICryptoProvider
 
         JsonObject metadata = new()
         {
-            {"method", Identifier},
             {"nonce", Convert.ToBase64String(nonce)},
             {"tag", Convert.ToBase64String(this._tag)},
-            {"keySize", this._keySize},
+            {"keySize", this._keySize}
         };
         
         if(this._additionalData != null)
