@@ -2,6 +2,11 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
+using PasswordManager.CipherMethods;
+using PasswordManager.KdfMethods;
+using PasswordManager.Misc;
+using PasswordManager.Repositories;
 
 namespace PasswordManager;
 
@@ -17,17 +22,106 @@ class Program
         Save,
         Quit
     }
+
+    private static void Save(PasswordManagers.PasswordManager pwManager, string file)
+    {
+        JsonObject json = new();
+        foreach (var row in pwManager.RetrieveAllAsync().Result)
+        {
+            var obj = new JsonObject()
+            {
+                {"cipherText", Convert.ToBase64String(row.Value.EncryptedPassword)},
+                {"cipherMethod", row.Value.CipherMethod},
+                {"cipherParams", JsonSerializer.SerializeToNode(row.Value.CipherMetadata)},
+                {"kdfMethod", row.Value.KdfMethod},
+                {"kdfParams", JsonSerializer.SerializeToNode(row.Value.KdfMetadata)}
+            };
+
+            json.Add(row.Key, obj);
+        }
+        var jsonSerializerOptions = new JsonSerializerOptions();
+        jsonSerializerOptions.WriteIndented = true;
+
+        File.WriteAllTextAsync(file, json.ToJsonString(jsonSerializerOptions)).Wait();
+        Console.WriteLine("Repository saved to passwords.json.");
+    }
+    
+    private static async Task Load(IPasswordRepository<string, PasswordManagers.PasswordManager.PasswordData> repo, string file)
+    {
+        if (!File.Exists(file))
+        {
+            return;
+        }
+        
+        var json = await File.ReadAllTextAsync(file);
+
+        Stream reader = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        JsonDocument jsonDoc;
+        try
+        {
+            jsonDoc = await JsonDocument.ParseAsync(reader);
+        } catch (JsonException)
+        {
+            return;
+        }
+        
+        List<Task> tasks = new();
+
+        foreach (var rowProp in jsonDoc.RootElement.EnumerateObject())
+        {
+            var row = rowProp.Value;
+
+            var cipherText = Convert.FromBase64String((row.TryGetProperty("cipherText", out var cipherTextProp) ? cipherTextProp.GetString() : string.Empty) ?? string.Empty);
+            
+            var cipherMethod = row.TryGetProperty("cipherMethod", out var cipherMethodProp) ? cipherMethodProp.GetString() : string.Empty;
+            
+            if (!row.TryGetProperty("cipherParams", out var cipherParamsProp)) continue;
+            var cipherMetadata = JsonObject.Create(cipherParamsProp);
+            
+            var kdfMethod = row.TryGetProperty("kdfMethod", out var kdfMethodProp) ? kdfMethodProp.GetString() : string.Empty;
+            
+            if (!row.TryGetProperty("kdfParams", out var kdfParamsProp)) continue;
+            var kdfMetadata = JsonObject.Create(kdfParamsProp);
+            
+
+            var passwordData = new PasswordManagers.PasswordManager.PasswordData(
+                cipherText, cipherMethod!, cipherMetadata!, kdfMethod!, kdfMetadata!
+            );
+
+            tasks.Add(repo.StoreAsync(rowProp.Name, passwordData));
+        }
+        
+        await Task.WhenAll(tasks);
+    }
+    
+
     static void Main(string[] args)
     {
-        var passwordManager = new PasswordManager(
-            new InMemoryPasswordRepository<string, PasswordManager.PasswordData>(),
+        if (args.Length != 1)
+        {
+            Console.WriteLine("Usage: PasswordManager <passwords.json>");
+            return;
+        }
+        
+        var repo = new InMemoryPasswordRepository<string, PasswordManagers.PasswordManager.PasswordData>();
+        
+        Console.WriteLine($"Loading repository from {args[0]}...");
+        Load(repo, args[0]).Wait();
+        Console.WriteLine($"{args[0]} loaded.");
+        
+        Console.WriteLine("Press any key to continue.");
+        Console.ReadKey();
+
+        var passwordManager = new PasswordManagers.PasswordManager(
+            repo,
             KdfProviderFactory,
             DefaultKdfProviderFactory,
             EncryptionProviderFactory,
             DefaultEncryptionProviderFactory,
             DecryptionProviderFactory
         );
-        
+
         State state = State.MainMenu;
 
         string key = null;
@@ -129,25 +223,8 @@ class Program
                 
                 case State.Save:
                     
-                    JsonObject json = new();
-                    foreach (var row in passwordManager.RetrieveAllAsync().Result)
-                    {
-                        var obj = new JsonObject()
-                        {
-                            {"cipherText", Convert.ToBase64String(row.Value.EncryptedPassword)},
-                            {"cipherMethod", row.Value.CipherMethod},
-                            {"cipherParams", JsonSerializer.SerializeToNode(row.Value.CipherMetadata)},
-                            {"kdfMethod", row.Value.KdfMethod},
-                            {"kdfParams", JsonSerializer.SerializeToNode(row.Value.KdfMetadata)}
-                        };
-
-                        json.Add(row.Key, obj);
-                    }
-                    var jsonSerializerOptions = new JsonSerializerOptions();
-                    jsonSerializerOptions.WriteIndented = true;
-
-                    File.WriteAllTextAsync("passwords.json", json.ToJsonString(jsonSerializerOptions)).Wait();
-                    Console.WriteLine("Repository saved to passwords.json.");
+                    Save(passwordManager, args[0]);
+                    Console.WriteLine($"Repository saved to {args[0]}.");
 
                     state = State.MainMenu;
                     break;
@@ -213,7 +290,7 @@ class Program
         };
     }
 
-    private static ICryptoProvider EncryptionProviderFactory(string cipherMethod, IKdfProvider kdfProvider, JsonObject param)
+    private static IEncryptionProvider EncryptionProviderFactory(string cipherMethod, IKdfProvider kdfProvider, JsonObject param)
     {
         return cipherMethod switch
         {

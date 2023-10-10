@@ -2,8 +2,12 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using PasswordManager.CipherMethods;
+using PasswordManager.KdfMethods;
+using PasswordManager.Misc;
+using PasswordManager.Repositories;
 
-namespace PasswordManager;
+namespace PasswordManager.PasswordManagers;
 
 
 
@@ -51,7 +55,8 @@ public class PasswordManager: IPasswordManager<PasswordManager.PasswordData>
             throw new ArgumentException($"Key {key} already exists");
         }
 
-        var salt = GenerateSalt(SaltSize);
+        var salt = new byte[SaltSize];
+        Utils.GenerateSalt(salt);
 
         var kdfProvider = this._defaultKdfFactory(passphrase);
         
@@ -156,14 +161,5 @@ public class PasswordManager: IPasswordManager<PasswordManager.PasswordData>
             this.KdfMethod = kdfMethod;
             this.KdfMetadata = kdfMetadata;
         }
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static byte[] GenerateSalt(int size)
-    {
-        using var rng = RandomNumberGenerator.Create();
-        var salt = new byte[size];
-        rng.GetBytes(salt);
-        return salt;
     }
 }

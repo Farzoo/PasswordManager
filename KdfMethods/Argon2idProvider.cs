@@ -1,7 +1,7 @@
 ﻿using System.Text.Json.Nodes;
 using Konscious.Security.Cryptography;
 
-namespace PasswordManager;
+namespace PasswordManager.KdfMethods;
 
 public class Argon2idProvider : IKdfProvider
 {

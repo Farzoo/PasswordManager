@@ -1,4 +1,4 @@
-﻿namespace PasswordManager;
+﻿namespace PasswordManager.Repositories;
 
 public interface IPasswordRepository<TKey, TEntity>
 {

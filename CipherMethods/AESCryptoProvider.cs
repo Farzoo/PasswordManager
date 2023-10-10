@@ -1,9 +1,10 @@
 ﻿using System.Security.Cryptography;
 using System.Text.Json.Nodes;
+using PasswordManager.KdfMethods;
 
-namespace PasswordManager;
+namespace PasswordManager.CipherMethods;
 
-public class AesCryptoProvider : ICryptoProvider
+public class AesCryptoProvider : IEncryptionProvider, IDecryptionProvider
 {
     private readonly IKdfProvider _kdfProvider;
 
@@ -14,7 +15,6 @@ public class AesCryptoProvider : ICryptoProvider
     private readonly int _keySize;
     
     private readonly int _nonceSize;
-    private readonly int _saltSize;
     public bool CanUse { get; private set; } = true;
     
     public string Identifier => IDENTIFIER;

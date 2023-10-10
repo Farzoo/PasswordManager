@@ -1,6 +1,6 @@
 ﻿using System.Text.Json.Nodes;
 
-namespace PasswordManager;
+namespace PasswordManager.KdfMethods;
 
 public interface IKdfProvider : IDisposable
 {

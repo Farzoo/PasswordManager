@@ -1,4 +1,4 @@
-﻿namespace PasswordManager;
+﻿namespace PasswordManager.Repositories;
 
 public class InMemoryPasswordRepository<TKey, TEntity>  : IPasswordRepository<TKey, TEntity> where TKey : notnull
 {
